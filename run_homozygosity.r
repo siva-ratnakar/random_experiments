@@ -27,7 +27,7 @@ process_myheritage_data <- function(file_path) {
                                levels = c(1:22, "X", "Y", "MT"))
   
   # Extract only SNPs with valid calls (exclude no-calls or indels)
-  valid_data <- valid_data[valid_data$RESULT != "--"]
+  valid_data <- raw_data[nchar(raw_data$RESULT) == 2]
   
   return(valid_data)
 }
@@ -52,7 +52,7 @@ determine_sex <- function(data) {
 # Function to add homozygosity column, accounting for sex chromosomes
 add_homozygosity <- function(data, sex) {
   # For autosomal chromosomes, check if both alleles are the same
-  data$homozygous <- substr(data$RESULT, 1, 1) == substr(data$RESULT, 2, 2)
+  data$homozygous <- substr(data$RESULT, 1, 1) == substr(data$RESULT, 2, 2) & data$RESULT != "--"
   
   if (sex == "male") {
     # For males, X and Y chromosomes should not be considered homozygous
