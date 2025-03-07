@@ -1,8 +1,10 @@
 ### Run it as:
-#Rscript run_homozygosity.R <path_to_csv> <path_to_output> 2>&1 | tee <path_to_output>/analysis.log
+#Rscript run_homozygosity.r <path_to_csv> <path_to_output> 2>&1 | tee <path_to_output>/analysis.log
+## If all files are in the same directory:
+## Rscript run_homozygosity.r ./MyHeritage_raw_dna_data.csv . 2>&1 | tee ./analysis.log
 ## This script processes MyHeritage DNA data to identify runs of homozygosity (ROH) and estimate inbreeding coefficients and consanguinity relationships of parents.
 ## The input file should be in CSV format with columns: RSID, CHROMOSOME, POSITION, RESULT. (The same as what you download from MyHeritage DNA result)
-
+## The output directory should be a path where the results and visualizations will be saved.
 
 suppressPackageStartupMessages({
     library(data.table)
@@ -214,6 +216,8 @@ roh_by_chromosome <- function(roh_data) {
 
 # Main analysis function
 analyze_consanguinity <- function(file_path, output_dir) {
+  genome_length <- 2881033286  # Total genome length in base pairs
+  
   cat("Reading and processing data...\n")
   dna_data <- process_myheritage_data(file_path)
   
@@ -239,10 +243,12 @@ analyze_consanguinity <- function(file_path, output_dir) {
   
   total_roh_mb <- sum(roh$length_kb) / 1000
   avg_roh_kb <- mean(roh$length_kb)
+  total_roh_percentage <- (total_roh_mb * 1000000 / genome_length) * 100
   
   cat("\nRuns of Homozygosity Results:\n")
   cat("Number of ROH segments:", nrow(roh), "\n")
   cat("Total ROH length:", round(total_roh_mb, 2), "Mb\n")
+  cat("Total ROH length as percentage of genome:", round(total_roh_percentage, 2), "%\n")
   cat("Average ROH length:", round(avg_roh_kb, 2), "kb\n")
   
   chrom_stats <- roh_by_chromosome(roh)
@@ -275,6 +281,7 @@ analyze_consanguinity <- function(file_path, output_dir) {
     sex = sex,
     roh_segments = roh,
     total_roh_mb = total_roh_mb,
+    total_roh_percentage = total_roh_percentage,
     inbreeding_coefficient = f_roh,
     likely_relationship = relationship,
     chromosome_stats = chrom_stats
@@ -288,22 +295,22 @@ plot_roh <- function(roh_data) {
                                levels = c(1:22))
   
   # Create the plot
-  p <- ggplot(roh_data, aes(x = chromosome, y = length_kb/1000)) +
+  p <- ggplot(roh_data, aes(x = chromosome, y = length_kb)) +
     geom_boxplot() +
     geom_jitter(width = 0.2, alpha = 0.5, color = "blue") +
     labs(title = "Runs of Homozygosity by Chromosome (Autosomes Only)",
          x = "Chromosome",
-         y = "ROH Length (Mb)") +
+         y = "ROH Length (kb)") +
     theme_minimal()
   
   return(p)
 }
 
 plot_roh_dist <- function(roh_data) {
-  p <- ggplot(roh_data, aes(x = length_kb/1000)) +
+  p <- ggplot(roh_data, aes(x = length_kb)) +
     geom_histogram(bins = 30, fill = "steelblue", color = "black") +
     labs(title = "Distribution of ROH Segment Lengths",
-         x = "ROH Length (Mb)",
+         x = "ROH Length (kb)",
          y = "Count") +
     theme_minimal()
   
