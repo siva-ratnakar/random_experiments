@@ -27,7 +27,7 @@ process_myheritage_data <- function(file_path) {
                                levels = c(1:22, "X", "Y", "MT"))
   
   # Extract only SNPs with valid calls (exclude no-calls or indels)
-  valid_data <- raw_data[nchar(raw_data$RESULT) == 2]
+  valid_data <- valid_data[valid_data$RESULT != "--"]
   
   return(valid_data)
 }
