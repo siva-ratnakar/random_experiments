@@ -5,6 +5,7 @@
 
 # Load libraries
 library(ggplot2)
+library(scales)
 
 # -----------------------------
 # USER PARAMETERS (modifiable)
@@ -113,8 +114,7 @@ decay_eqs <- paste0(
 subtitle_text <- paste0("With uniform consumption during eating: equivalent to ", 
                         round(beer_equiv,2), " beers (approx)")
 
-# Improved main plot: Beer-equivalent (ml) over time with a secondary axis showing beers
-library(scales)
+# Plot: Beer-equivalent (ml) over time with a secondary axis showing beers
 main_plot <- ggplot(df, aes(x = Time)) +
   geom_line(aes(y = Beer_ml_equiv, color = Stage), size = 1.4) +
   geom_area(aes(y = Beer_ml_equiv, fill = Stage), alpha = 0.12) +
