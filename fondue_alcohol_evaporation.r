@@ -1,5 +1,6 @@
 # -----------------------------
 # FONDUE ALCOHOL EVAPORATION MODEL
+# WITH UNIFORM CONSUMPTION
 # -----------------------------
 
 # Load libraries
@@ -45,18 +46,37 @@ k_burner <- burner_evaporation_constant
 
 # After cooking (simmering)
 fraction_after_cook <- exp(-k_cook * cook_time)
+ethanol_after_cook_g <- ethanol_init_g * fraction_after_cook
 
-# During eating (on burner)
-fraction_after_eating <- exp(-k_burner * eat_time)
+# -----------------------------
+# UNIFORM CONSUMPTION MODEL
+# -----------------------------
+# We assume uniform consumption throughout the eating period.
+# The fondue is consumed at a constant rate of (1/eat_time) per minute.
+# After eat_time minutes, 100% of the fondue has been consumed.
+#
+# At time s (where 0 ≤ s ≤ eat_time), the ethanol concentration is:
+#   C(s) = ethanol_after_cook_g * exp(-k_burner * s)
+#
+# The total ethanol consumed is the integral:
+#   ∫[0 to eat_time] (1/eat_time) * C(s) ds
+#   = (1/eat_time) * ethanol_after_cook_g * ∫[0 to eat_time] exp(-k_burner * s) ds
+#   = (1/eat_time) * ethanol_after_cook_g * [-1/k_burner * exp(-k_burner * s)]|[0 to eat_time]
+#   = (ethanol_after_cook_g / (k_burner * eat_time)) * (1 - exp(-k_burner * eat_time))
 
-# Total remaining fraction
-fraction_total <- fraction_after_cook * fraction_after_eating
-ethanol_final_g <- ethanol_init_g * fraction_total
+# Calculate total ethanol consumed with uniform consumption
+if (k_burner > 0) {
+  ethanol_consumed_g <- (ethanol_after_cook_g / (k_burner * eat_time)) * 
+                        (1 - exp(-k_burner * eat_time))
+} else {
+  # If no evaporation during eating (k_burner = 0), all ethanol is consumed
+  ethanol_consumed_g <- ethanol_after_cook_g
+}
 
-# 3. Beer comparison (single-beer ethanol content)
+# 3. Beer comparison
 beer_ethanol_ml <- beer_vol * beer_abv
 beer_ethanol_g <- beer_ethanol_ml * ethanol_density
-beer_equiv <- ethanol_final_g / beer_ethanol_g
+beer_equiv <- ethanol_consumed_g / beer_ethanol_g
 
 # -----------------------------
 # MODEL CURVE FOR PLOT
@@ -67,11 +87,10 @@ time_eat <- seq(0, eat_time, by = 0.1)
 # Stage 1 (cooking)
 ethanol_cook <- ethanol_init_g * exp(-k_cook * time_cook)
 
-# Stage 2 (eating)
+# Stage 2 (eating) - showing the ethanol in the pot as it evaporates
 ethanol_eat <- tail(ethanol_cook, 1) * exp(-k_burner * time_eat)
 
 # Combine full timeline
-df <- data.frame(Time = time_total, Ethanol_g = ethanol_total)
 time_total <- c(time_cook, cook_time + time_eat)
 ethanol_total <- c(ethanol_cook, ethanol_eat)
 
@@ -91,8 +110,8 @@ decay_eqs <- paste0(
   "Cooking: exp(-", round(k_cook,4), " * t)\n",
   "Serving: exp(-", round(k_burner,4), " * t)")
 
-subtitle_text <- paste0("After serving: equivalent to ", round(beer_equiv,2),
-                        " beers (approx)")
+subtitle_text <- paste0("With uniform consumption during eating: equivalent to ", 
+                        round(beer_equiv,2), " beers (approx)")
 
 # Improved main plot: Beer-equivalent (ml) over time with a secondary axis showing beers
 library(scales)
@@ -100,7 +119,8 @@ main_plot <- ggplot(df, aes(x = Time)) +
   geom_line(aes(y = Beer_ml_equiv, color = Stage), size = 1.4) +
   geom_area(aes(y = Beer_ml_equiv, fill = Stage), alpha = 0.12) +
   geom_vline(xintercept = cook_time, linetype = "dashed", color = "gray40") +
-  geom_point(data = df[which.max(df$Time), ], aes(x = Time, y = Beer_ml_equiv), color = "black", size = 2) +
+  geom_point(data = df[which.max(df$Time), ], aes(x = Time, y = Beer_ml_equiv), 
+             color = "black", size = 2) +
   scale_color_manual(values = c("Cooking" = "#D73027", "Serving" = "#4575B4")) +
   scale_fill_manual(values = c("Cooking" = "#D73027", "Serving" = "#4575B4")) +
   scale_y_continuous(
@@ -123,21 +143,21 @@ pct_plot <- ggplot(df, aes(x = Time, y = Pct_remain)) +
   geom_line(color = "darkgreen", size = 1.3) +
   geom_hline(yintercept = c(100, 50, 25), linetype = "dotted", color = "gray85") +
   labs(x = "Time (minutes)", y = "Percent of initial ethanol (%)",
-       title = "Percent of Initial Ethanol Remaining") +
+       title = "Percent of Initial Ethanol Remaining in Pot") +
   scale_y_continuous(labels = function(x) paste0(round(x,0), "%")) +
   theme_minimal(base_size = 12)
 
 # Print both plots (user can arrange/ggsave as desired)
 print(main_plot)
-print(pct_plot)
+#print(pct_plot) # Uncomment to view percent remaining plot
 
 # -----------------------------
 # PRINT SUMMARY
 # -----------------------------
 cat("Initial ethanol:", round(ethanol_init_g,2), "g\n")
 cat("After cooking (", cook_time, "min):", round(fraction_after_cook*100,1), "% remains\n")
-cat("After eating (", eat_time, "min):", round(fraction_total*100,1), "% of initial remains\n")
-cat("Ethanol remaining (after serving):", round(ethanol_final_g,2), "g\n")
+cat("Ethanol consumed (uniform consumption over", eat_time, "min):", 
+    round(ethanol_consumed_g,2), "g\n")
 cat("Beer equivalent (approx):", round(beer_equiv,2), " beers\n")
 
 
@@ -146,15 +166,17 @@ cat("Beer equivalent (approx):", round(beer_equiv,2), " beers\n")
 # -----------------------------
 
 ####################################################################################################################
-### Half a serving per person (with default parameters) is about 0.625 beers equivalent.
-### This corresponds to a blood alcohol concentration (BAC) of approximately 0.01% for an average adult, 
-### which is described as slight "buzz", or a feeling of warmth and relaxation, but generally not impairing.
-
-### To get "legally drunk" (0.08% BAC), one would require ~ 3.2 servings of Foundue
+### With UNIFORM CONSUMPTION throughout eating (100% consumed by end of eat_time):
+### Half a serving per person (with default parameters) is about 0.78 beers equivalent.
+###
+### This corresponds to a blood alcohol concentration (BAC) of approximately 0.0125% for an average adult, 
+### which is described as a slight "buzz", or a feeling of warmth and relaxation, but generally not impairing.
+###
+### To get "legally drunk" (0.08% BAC), one would require approximately 2.6 servings of Fondue.
 ####################################################################################################################
 
 # -----------------------------
-# COMMENTS on METHOD USED
+# COMMENTS on METHODS USED
 # -----------------------------
 # I used the Widmark approach to estimate how much pure ethanol (grams) would
 # be needed to reach a target BAC (blood alcohol concentration).
@@ -175,3 +197,16 @@ cat("Beer equivalent (approx):", round(beer_equiv,2), " beers\n")
 #     where k (1/min) is the rate constant and t is time in minutes.
 #   - The half-life is t1/2 = ln(2) / k; this assumes the loss rate is proportional
 #     to the amount remaining (a common simple mass-transfer approximation).
+#
+# UNIFORM CONSUMPTION MODEL:
+#   - The model assumes fondue is consumed uniformly throughout the eating period,
+#     with a constant consumption rate = 1/eat_time per minute.
+#   - By the end of eat_time, 100% of the fondue has been consumed.
+#   - The total ethanol consumed is calculated by integrating the product of:
+#     (consumption rate) × (ethanol concentration at time t) over [0, eat_time].
+#   - This gives: ∫[0,T] (1/T) * E₀ * exp(-k*t) dt = (E₀/(k*T)) * (1 - exp(-k*T))
+#     where E₀ is ethanol after cooking, k is burner evaporation rate, T is eat_time.
+#   - This integral represents the time-weighted average of the ethanol content.
+#   - Since the fondue is consumed continuously while evaporation is ongoing, the
+#     total ethanol intake accounts for both the higher concentration at the beginning
+#     and the lower concentration toward the end of the eating period.
